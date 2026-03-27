@@ -2098,6 +2098,257 @@ print(f"P(ровно 2 одного пола) = {p_exactly_2}")  # 0.75
 print("P(хотя бы 2 одного пола) = 1.0")
 """))
 
+# ─────────────────────────────────────────────
+# 2.6 ADDITIONAL TOPICS WITH VISUAL EXPLANATIONS
+# ─────────────────────────────────────────────
+cells.append(md("""## 2.6 Дополнительные темы: понятные объяснения + графики + мини-примеры
+<a name='26-дополнительные-темы'></a>
+
+Ниже — дополнительные вопросы, которые часто встречаются на собеседованиях, и которые вы просили добавить:
+- линейная регрессия и MSE;
+- bias-variance tradeoff;
+- доверительные интервалы и bootstrap;
+- attention в трансформерах;
+- SQL оконные функции на простом примере;
+- быстрые практические вопросы по Pandas/NumPy/Jupyter.
+"""))
+
+cells.append(md("""### Тема A1. Линейная регрессия: как понять «лучшую прямую» интуитивно?
+`[Классический ML]`
+
+**Простой смысл:**
+- хотим провести линию, которая в среднем ближе всего к точкам;
+- «ближе» обычно измеряем через **MSE** — средний квадрат ошибки;
+- квадрат нужен, чтобы сильнее штрафовать крупные промахи.
+
+**Что спросят на интервью:**
+1. Почему именно квадрат ошибки, а не модуль?
+2. Что означает коэффициент наклона?
+3. Как понять, что модель недообучена?
+"""))
+
+cells.append(code("""import numpy as np
+import matplotlib.pyplot as plt
+
+# Синтетические данные
+rng = np.random.default_rng(42)
+X = np.linspace(0, 10, 60)
+y = 2.5 * X + 5 + rng.normal(0, 3, size=len(X))
+
+# Оценка коэффициентов через polyfit
+k, b = np.polyfit(X, y, deg=1)
+y_hat = k * X + b
+mse = np.mean((y - y_hat) ** 2)
+
+plt.figure(figsize=(8, 5))
+plt.scatter(X, y, alpha=0.7, label="Данные")
+plt.plot(X, y_hat, color="crimson", linewidth=2.5, label=f"Линия регрессии: y={k:.2f}x+{b:.2f}")
+plt.title(f"Линейная регрессия (MSE={mse:.2f})")
+plt.xlabel("X")
+plt.ylabel("y")
+plt.grid(alpha=0.3)
+plt.legend()
+plt.show()
+
+print("Интерпретация:")
+print("- k показывает, как меняется y при увеличении X на 1.")
+print("- b — значение y, когда X=0.")
+print("- Чем меньше MSE, тем лучше линия приближает данные.")
+"""))
+
+cells.append(md("""### Тема A2. Bias-Variance Tradeoff на пальцах
+`[Классический ML]`
+
+**Идея:**
+- слишком простая модель → высокий **bias** (не ловит закономерность);
+- слишком сложная модель → высокий **variance** (ловит шум);
+- нам нужна «золотая середина», где ошибка на валидации минимальна.
+"""))
+
+cells.append(code("""import numpy as np
+import matplotlib.pyplot as plt
+from sklearn.preprocessing import PolynomialFeatures
+from sklearn.linear_model import LinearRegression
+from sklearn.pipeline import make_pipeline
+from sklearn.metrics import mean_squared_error
+
+rng = np.random.default_rng(7)
+X = np.linspace(0, 1, 120)
+y_true = np.sin(2 * np.pi * X)
+y = y_true + rng.normal(0, 0.15, size=len(X))
+
+# train/val split
+idx = np.arange(len(X))
+rng.shuffle(idx)
+train_idx, val_idx = idx[:80], idx[80:]
+X_train, y_train = X[train_idx][:, None], y[train_idx]
+X_val, y_val = X[val_idx][:, None], y[val_idx]
+
+degrees = range(1, 13)
+train_err, val_err = [], []
+
+for d in degrees:
+    model = make_pipeline(PolynomialFeatures(d), LinearRegression())
+    model.fit(X_train, y_train)
+    train_err.append(mean_squared_error(y_train, model.predict(X_train)))
+    val_err.append(mean_squared_error(y_val, model.predict(X_val)))
+
+best_d = list(degrees)[int(np.argmin(val_err))]
+
+plt.figure(figsize=(8, 5))
+plt.plot(list(degrees), train_err, marker="o", label="Train MSE")
+plt.plot(list(degrees), val_err, marker="o", label="Validation MSE")
+plt.axvline(best_d, linestyle="--", color="gray", label=f"Лучший degree={best_d}")
+plt.title("Bias-Variance Tradeoff")
+plt.xlabel("Сложность модели (степень полинома)")
+plt.ylabel("MSE")
+plt.grid(alpha=0.3)
+plt.legend()
+plt.show()
+
+print("Как объяснить интервьюеру:")
+print("- Левая часть графика: underfitting (высокий bias).")
+print("- Правая часть графика: overfitting (высокий variance).")
+print("- Берём сложность около минимума validation MSE.")
+"""))
+
+cells.append(md("""### Тема A3. Центральная предельная теорема + Bootstrap CI
+`[Мат. статистика]`
+
+**Что важно уметь объяснить:**
+1. Почему среднее по выборке становится «почти нормальным» при росте n?
+2. Когда использовать bootstrap?
+3. Как получить доверительный интервал без сложной аналитики?
+"""))
+
+cells.append(code("""import numpy as np
+import matplotlib.pyplot as plt
+
+rng = np.random.default_rng(123)
+
+# Ненормальное распределение (экспоненциальное)
+population = rng.exponential(scale=2.0, size=200_000)
+
+# CLT: распределение средних
+n = 40
+means = [rng.choice(population, size=n, replace=True).mean() for _ in range(3000)]
+
+plt.figure(figsize=(8, 4.5))
+plt.hist(means, bins=40, alpha=0.8, color="teal", density=True)
+plt.title("CLT: распределение средних выборок (n=40)")
+plt.xlabel("Среднее по выборке")
+plt.ylabel("Плотность")
+plt.grid(alpha=0.25)
+plt.show()
+
+# Bootstrap CI для среднего по одной выборке
+sample = rng.choice(population, size=120, replace=False)
+boot_means = [rng.choice(sample, size=len(sample), replace=True).mean() for _ in range(4000)]
+ci_low, ci_high = np.percentile(boot_means, [2.5, 97.5])
+
+print(f"Среднее по sample: {sample.mean():.3f}")
+print(f"95% bootstrap CI: [{ci_low:.3f}, {ci_high:.3f}]")
+"""))
+
+cells.append(md("""### Тема A4. Attention в трансформерах — очень простой пример
+`[Нейронные сети / Transformers]`
+
+**Как объяснять просто:**
+- каждый токен «смотрит» на другие токены и решает, кто важнее;
+- веса внимания (attention weights) показывают, на что модель опиралась сильнее;
+- output токена = взвешенная сумма представлений других токенов.
+"""))
+
+cells.append(code("""import numpy as np
+import matplotlib.pyplot as plt
+
+tokens = ["я", "люблю", "машинное", "обучение"]
+
+# Игрушечная матрица attention (4x4): строки — query, столбцы — key
+attn = np.array([
+    [0.45, 0.25, 0.15, 0.15],
+    [0.15, 0.35, 0.25, 0.25],
+    [0.10, 0.20, 0.40, 0.30],
+    [0.10, 0.15, 0.30, 0.45],
+])
+
+plt.figure(figsize=(6, 5))
+plt.imshow(attn, cmap="Blues")
+plt.colorbar(label="attention weight")
+plt.xticks(range(len(tokens)), tokens, rotation=30)
+plt.yticks(range(len(tokens)), tokens)
+plt.title("Матрица внимания (упрощённо)")
+plt.xlabel("Key токены")
+plt.ylabel("Query токены")
+plt.tight_layout()
+plt.show()
+
+print("Пример чтения матрицы:")
+print("- Строка 'обучение': максимальный вес на себе и на слове 'машинное'.")
+print("- Это похоже на фокус внимания при понимании контекста фразы.")
+"""))
+
+cells.append(md("""### Тема A5. SQL оконные функции — что отвечать на собеседовании
+`[SQL]`
+
+**Ключевая мысль:** оконные функции считают метрики по «окну» строк и **не схлопывают** строки, в отличие от `GROUP BY`.
+"""))
+
+cells.append(code("""sql_window_example = \"\"\"
+-- Дано: продажи по дням.
+-- Нужно: скользящая сумма за 3 дня и ранг продаж в месяце.
+SELECT
+    dt,
+    amount,
+    SUM(amount) OVER (
+        ORDER BY dt
+        ROWS BETWEEN 2 PRECEDING AND CURRENT ROW
+    ) AS rolling_3d_sum,
+    DENSE_RANK() OVER (
+        PARTITION BY DATE_TRUNC('month', dt)
+        ORDER BY amount DESC
+    ) AS rank_in_month
+FROM sales
+ORDER BY dt;
+\"\"\"
+print(sql_window_example)
+print("Почему это любят спрашивать: проверяет понимание аналитических запросов.")
+"""))
+
+cells.append(md("""### Тема A6. Mini-практика: Pandas / NumPy / Jupyter
+`[Pandas, NumPy, Работа в Jupyter]`
+
+**Частые быстрые вопросы:**
+1. Как быстро найти пропуски по колонкам?
+2. Как векторизовать вычисления вместо `for`?
+3. Как в ноутбуке сделать воспроизводимый пайплайн?
+"""))
+
+cells.append(code("""import numpy as np
+import pandas as pd
+
+# 1) Pandas: пропуски
+df = pd.DataFrame({
+    "age": [21, None, 35, 29, None],
+    "income": [50_000, 62_000, None, 71_000, 65_000],
+    "target": [0, 1, 0, 1, 1]
+})
+print("Доля пропусков:")
+print((df.isna().mean() * 100).round(1).astype(str) + "%")
+
+# 2) NumPy: векторизация (z-score)
+x = np.array([10, 12, 9, 11, 200], dtype=float)
+z = (x - x.mean()) / x.std()
+print("\\nZ-score:", np.round(z, 2))
+print("Потенциальный выброс:", x[np.argmax(np.abs(z))])
+
+# 3) Jupyter best-practice
+print("\\nJupyter-практика:")
+print("- Фиксируйте random seed.")
+print("- Делите ноутбук на: загрузка -> EDA -> features -> model -> validation.")
+print("- Сохраняйте ключевые артефакты (модель, метрики, конфиг).")
+"""))
+
 # FINAL NOTE
 cells.append(md("""---
 
