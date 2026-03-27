@@ -1,4 +1,6 @@
 import json
+import os
+from pathlib import Path
 
 cells = []
 
@@ -13,6 +15,21 @@ def code(source):
         "outputs": [],
         "source": source
     }
+
+
+def resolve_output_path() -> Path:
+    """
+    Возвращает путь, куда сохранять notebook.
+
+    Приоритет:
+    1) переменная окружения NOTEBOOK_OUTPUT_PATH
+    2) файл DS_ML_Interview_Prep.ipynb рядом со скриптом
+    """
+    env_path = os.getenv("NOTEBOOK_OUTPUT_PATH")
+    if env_path:
+        return Path(env_path).expanduser().resolve()
+
+    return (Path(__file__).resolve().parent / "DS_ML_Interview_Prep.ipynb")
 
 # ─────────────────────────────────────────────
 # TITLE
@@ -1627,7 +1644,7 @@ cells.append(code("""import numpy as np
 from scipy.optimize import minimize_scalar
 
 def optimal_p_analytical(N_zeros: int, M_ones: int) -> float:
-    \"\"\"
+    \\"\\"\\"
     Аналитическое решение: берём производную LogLoss по p и приравниваем к 0.
 
     L(p) = -M*log(p) - N*log(1-p)
@@ -1637,7 +1654,7 @@ def optimal_p_analytical(N_zeros: int, M_ones: int) -> float:
     p = M / (M + N)
 
     Оптимальная p = доля единиц в датасете (MAP оценка).
-    """
+    \\"\\"\\"
     return M_ones / (N_zeros + M_ones)
 
 def logloss_constant(p: float, N: int, M: int) -> float:
@@ -2114,7 +2131,9 @@ notebook = {
     "cells": cells
 }
 
-output_path = "/mnt/user-data/outputs/DS_ML_Interview_Prep.ipynb"
+output_path = resolve_output_path()
+output_path.parent.mkdir(parents=True, exist_ok=True)
+
 with open(output_path, "w", encoding="utf-8") as f:
     json.dump(notebook, f, ensure_ascii=False, indent=2)
 
